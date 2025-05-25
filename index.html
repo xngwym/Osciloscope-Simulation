@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Oscilloscope Simulation</title>
+    <style>
+      body {
+        background: black;
+        color: white;
+        font-family: sans-serif;
+        text-align: center;
+      }
+      canvas {
+        background: black;
+        border: 2px solid #0f0;
+        display: block;
+        margin: 20px auto;
+      }
+      .controls {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-bottom: 10px;
+      }
+      .controls label {
+        display: flex;
+        flex-direction: column;
+        color: white;
+      }
+      .controls input,
+      .controls select {
+        width: 80px;
+        padding: 4px;
+      }
+      .smallCanvas {
+        width: 500px;
+        height: 200px;
+        border: 2px solid #0f0;
+        margin: 10px auto;
+        background: black;
+      }
+      /* Ẩn input Gauss mặc định */
+      .gauss-params {
+        display: none;
+        color: white;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Oscilloscope Simulation 3 Plots & Lissajous 3 Plots & Gauss</h2>
+
+    <div class="controls">
+      <label class="non-gauss"
+        >fY (Hz)
+        <input type="number" id="freqY" step="1" value="1" />
+      </label>
+      <label class="non-gauss"
+        >φY (deg)
+        <input type="number" id="phiY" step="1" value="0" />
+      </label>
+      <label class="non-gauss"
+        >fX (Hz)
+        <input type="number" id="freqX" step="1" value="1" />
+      </label>
+      <label class="non-gauss"
+        >φX (deg)
+        <input type="number" id="phiX" step="1" value="0" />
+      </label>
+      <label class="non-gauss"
+        >a (quét thuận)
+        <input type="number" id="a" step="0.1" value="1.25" />
+      </label>
+      <label class="non-gauss"
+        >b (quét ngược)
+        <input type="number" id="b" step="0.1" value="0.25" />
+      </label>
+
+      <label>
+        Chế độ
+        <select id="mode">
+          <option value="oscilloscope3">Oscilloscope</option>
+          <option value="lissajous3">Lissajous</option>
+          <option value="gauss">Gauss</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="controls gauss-params">
+      <label>
+        μ (Mean)
+        <input type="number" id="mu" step="0.1" value="0" />
+      </label>
+      <label>
+        σ (Std dev)
+        <input type="number" id="sigma" step="0.1" value="1" min="0.1" />
+      </label>
+    </div>
+
+    <canvas id="oscilo" width="500" height="500"></canvas>
+    <canvas id="xtPlot" class="smallCanvas" width="500" height="200"></canvas>
+    <canvas id="ytPlot" class="smallCanvas" width="500" height="200"></canvas>
+
+    <script>
+      const canvas = document.getElementById("oscilo");
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width;
+      const H = canvas.height;
+
+      const xtCanvas = document.getElementById("xtPlot");
+      const xtCtx = xtCanvas.getContext("2d");
+      const ytCanvas = document.getElementById("ytPlot");
+      const ytCtx = ytCanvas.getContext("2d");
+
+      const muInput = document.getElementById("mu");
+      const sigmaInput = document.getElementById("sigma");
+
+      // Các input non-gauss
+      const nonGaussInputs = document.querySelectorAll(".non-gauss");
+
+      function toCanvasX(x, width) {
+        return ((x + 1) * width) / 2;
+      }
+      function toCanvasY(y, height) {
+        return height / 2 - y * (height / 2);
+      }
+
+      function drawGrid(ctx, width, height) {
+        ctx.strokeStyle = "#0f0";
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i <= 10; i++) {
+          let x = (i / 10) * width;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+        for (let i = 0; i <= 10; i++) {
+          let y = (i / 10) * height;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(width / 2, 0);
+        ctx.lineTo(width / 2, height);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, height / 2);
+        ctx.lineTo(width, height / 2);
+        ctx.stroke();
+      }
+
+      function drawOscilloscope3() {
+        ctx.clearRect(0, 0, W, H);
+        drawGrid(ctx, W, H);
+
+        const fY = parseFloat(document.getElementById("freqY").value);
+        const phiY =
+          (parseFloat(document.getElementById("phiY").value) * Math.PI) / 180;
+        const fX = parseFloat(document.getElementById("freqX").value);
+        const phiX =
+          (parseFloat(document.getElementById("phiX").value) * Math.PI) / 180;
+        const a = parseFloat(document.getElementById("a").value);
+        const b = parseFloat(document.getElementById("b").value);
+
+        const T1 = a;
+        const T2 = b;
+        const oneCycle = T1 + T2;
+        const totalTime = 2 * oneCycle;
+
+        const points = 1000;
+        const dt = totalTime / points;
+
+        for (let i = 0; i < points; i++) {
+          let t = i * dt;
+          let modT = t % (T1 + T2);
+          let xRaw;
+          let isForward;
+
+          if (modT < T1) {
+            let ratio = modT / T1;
+            xRaw = -1 + 2 * ratio;
+            isForward = true;
+          } else {
+            let ratio = (modT - T1) / T2;
+            xRaw = 1 - 2 * ratio;
+            isForward = false;
+          }
+
+          let y = Math.sin(2 * Math.PI * fY * t + phiY);
+          let x = xRaw;
+
+          let cx = toCanvasX(x, W);
+          let cy = toCanvasY(y, H);
+
+          ctx.fillStyle = isForward ? "red" : "cyan";
+          ctx.fillRect(cx, cy, 1.5, 1.5);
+        }
+
+        // X(t)
+        xtCtx.clearRect(0, 0, xtCanvas.width, xtCanvas.height);
+        drawGrid(xtCtx, xtCanvas.width, xtCanvas.height);
+        xtCtx.beginPath();
+        for (let i = 0; i < points; i++) {
+          let t = i * dt;
+          let modT = t % (T1 + T2);
+          let xRaw;
+          if (modT < T1) {
+            let ratio = modT / T1;
+            xRaw = -1 + 2 * ratio;
+          } else {
+            let ratio = (modT - T1) / T2;
+            xRaw = 1 - 2 * ratio;
+          }
+          let xCanvas = (i / points) * xtCanvas.width;
+          let yCanvas = toCanvasY(xRaw, xtCanvas.height);
+          if (i === 0) xtCtx.moveTo(xCanvas, yCanvas);
+          else xtCtx.lineTo(xCanvas, yCanvas);
+        }
+        xtCtx.strokeStyle = "orange";
+        xtCtx.lineWidth = 1.5;
+        xtCtx.stroke();
+
+        // Y(t)
+        ytCtx.clearRect(0, 0, ytCanvas.width, ytCanvas.height);
+        drawGrid(ytCtx, ytCanvas.width, ytCanvas.height);
+        ytCtx.beginPath();
+        for (let i = 0; i < points; i++) {
+          let t = i * dt;
+          let y = Math.sin(2 * Math.PI * fY * t + phiY);
+          let xCanvas = (i / points) * ytCanvas.width;
+          let yCanvas = toCanvasY(y, ytCanvas.height);
+          if (i === 0) ytCtx.moveTo(xCanvas, yCanvas);
+          else ytCtx.lineTo(xCanvas, yCanvas);
+        }
+        ytCtx.strokeStyle = "cyan";
+        ytCtx.lineWidth = 1.5;
+        ytCtx.stroke();
+      }
+
+      function drawLissajous3() {
+        ctx.clearRect(0, 0, W, H);
+        drawGrid(ctx, W, H);
+
+        const fY = parseFloat(document.getElementById("freqY").value);
+        const phiY =
+          (parseFloat(document.getElementById("phiY").value) * Math.PI) / 180;
+        const fX = parseFloat(document.getElementById("freqX").value);
+        const phiX =
+          (parseFloat(document.getElementById("phiX").value) * Math.PI) / 180;
+        const a = parseFloat(document.getElementById("a").value);
+        const b = parseFloat(document.getElementById("b").value);
+
+        const points = 2000;
+        ctx.beginPath();
+        for (let i = 0; i < points; i++) {
+          let t = (i / points) * 2 * Math.PI;
+          let x = Math.sin(2 * Math.PI * fX * t + phiX);
+          let y = Math.sin(2 * Math.PI * fY * t + phiY);
+
+          let cx = toCanvasX(x, W);
+          let cy = toCanvasY(y, H);
+
+          if (i === 0) ctx.moveTo(cx, cy);
+          else ctx.lineTo(cx, cy);
+        }
+        ctx.strokeStyle = "lime";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // X(t)
+        xtCtx.clearRect(0, 0, xtCanvas.width, xtCanvas.height);
+        drawGrid(xtCtx, xtCanvas.width, xtCanvas.height);
+        xtCtx.beginPath();
+        for (let i = 0; i < points; i++) {
+          let t = (i / points) * 2 * Math.PI;
+          let x = Math.sin(2 * Math.PI * fX * t + phiX);
+          let xCanvas = (i / points) * xtCanvas.width;
+          let yCanvas = toCanvasY(x, xtCanvas.height);
+          if (i === 0) xtCtx.moveTo(xCanvas, yCanvas);
+          else xtCtx.lineTo(xCanvas, yCanvas);
+        }
+        xtCtx.strokeStyle = "orange";
+        xtCtx.lineWidth = 1.5;
+        xtCtx.stroke();
+
+        // Y(t)
+        ytCtx.clearRect(0, 0, ytCanvas.width, ytCanvas.height);
+        drawGrid(ytCtx, ytCanvas.width, ytCanvas.height);
+        ytCtx.beginPath();
+        for (let i = 0; i < points; i++) {
+          let t = (i / points) * 2 * Math.PI;
+          let y = Math.sin(2 * Math.PI * fY * t + phiY);
+          let xCanvas = (i / points) * ytCanvas.width;
+          let yCanvas = toCanvasY(y, ytCanvas.height);
+          if (i === 0) ytCtx.moveTo(xCanvas, yCanvas);
+          else ytCtx.lineTo(xCanvas, yCanvas);
+        }
+        ytCtx.strokeStyle = "cyan";
+        ytCtx.lineWidth = 1.5;
+        ytCtx.stroke();
+      }
+
+      function drawGauss() {
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = "white";
+        ctx.font = "24px monospace";
+        ctx.fillText("Gaussian Distribution", 110, 40);
+
+        // Vẽ trục X
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(50, H / 2);
+        ctx.lineTo(W - 50, H / 2);
+        ctx.stroke();
+
+        // Vẽ trục Y
+        ctx.beginPath();
+        ctx.moveTo(50, 50);
+        ctx.lineTo(50, H - 50);
+        ctx.stroke();
+
+        const mu = parseFloat(muInput.value);
+        const sigma = parseFloat(sigmaInput.value);
+
+        // Hàm mật độ xác suất phân phối chuẩn
+        function gaussPDF(x) {
+          return (
+            (1 / (sigma * Math.sqrt(2 * Math.PI))) *
+            Math.exp(-0.5 * ((x - mu) / sigma) ** 2)
+          );
+        }
+
+        // Khoảng vẽ x từ (mu - 4sigma) đến (mu + 4sigma)
+        const xMin = mu - 4 * sigma;
+        const xMax = mu + 4 * sigma;
+        const scaleX = (W - 100) / (xMax - xMin);
+        const scaleY = (H - 100) * 0.9; // tỉ lệ vẽ trong canvas
+
+        // Vẽ phần tô màu diện tích dưới đường cong trong ±3σ
+        const xFillMin = mu - 3 * sigma;
+        const xFillMax = mu + 3 * sigma;
+
+        ctx.fillStyle = "rgba(0,255,0,0.3)"; // màu xanh lá trong suốt
+        ctx.beginPath();
+        for (let px = 0; px <= W - 100; px++) {
+          let x = xMin + px / scaleX;
+          let y = gaussPDF(x);
+          let canvasX = 50 + px;
+          let canvasY = H / 2 - y * scaleY;
+
+          if (x >= xFillMin && x <= xFillMax) {
+            if (px === 0 || x < xFillMin) {
+              ctx.moveTo(canvasX, H / 2);
+            }
+            ctx.lineTo(canvasX, canvasY);
+          }
+        }
+        // Vẽ đường thẳng xuống trục X để đóng vùng
+        ctx.lineTo(50 + (xFillMax - xMin) * scaleX, H / 2);
+        ctx.closePath();
+        ctx.fill();
+
+        // Vẽ đồ thị PDF màu xanh lá
+        ctx.strokeStyle = "lime";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let px = 0; px <= W - 100; px++) {
+          let x = xMin + px / scaleX;
+          let y = gaussPDF(x);
+          let canvasX = 50 + px;
+          let canvasY = H / 2 - y * scaleY;
+          if (px === 0) ctx.moveTo(canvasX, canvasY);
+          else ctx.lineTo(canvasX, canvasY);
+        }
+        ctx.stroke();
+
+        // Ghi chú μ, σ và ±3σ
+        ctx.fillStyle = "white";
+        ctx.font = "18px monospace";
+        ctx.fillText(`μ = ${mu.toFixed(2)}`, 60, 70);
+        ctx.fillText(`σ = ${sigma.toFixed(2)}`, 60, 95);
+
+        // Hàm vẽ mốc dấu trên trục X
+        function drawMark(xValue, label, color = "yellow") {
+          const x = 50 + (xValue - xMin) * scaleX;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, H / 2);
+          ctx.lineTo(x, H / 2 + 10);
+          ctx.stroke();
+
+          ctx.fillStyle = color;
+          ctx.font = "14px monospace";
+          ctx.fillText(label, x - 20, H / 2 + 30);
+        }
+
+        // Vẽ mốc ±1σ, ±2σ, ±3σ
+        drawMark(mu - sigma, "μ - 1σ");
+        drawMark(mu + sigma, "μ + 1σ");
+
+        drawMark(mu - 2 * sigma, "μ - 2σ");
+        drawMark(mu + 2 * sigma, "μ + 2σ");
+
+        drawMark(mu - 3 * sigma, "μ - 3σ");
+        drawMark(mu + 3 * sigma, "μ + 3σ");
+      }
+
+      function update() {
+        const mode = document.getElementById("mode").value;
+
+        if (mode === "gauss") {
+          // Hiển thị input μ, σ
+          document.querySelector(".gauss-params").style.display = "flex";
+          // Ẩn input non-gauss
+          nonGaussInputs.forEach((el) => (el.style.display = "none"));
+          drawGauss();
+          xtCanvas.style.display = "none";
+          ytCanvas.style.display = "none";
+          canvas.style.display = "block";
+        } else {
+          document.querySelector(".gauss-params").style.display = "none";
+          nonGaussInputs.forEach((el) => (el.style.display = "flex"));
+          xtCanvas.style.display = "block";
+          ytCanvas.style.display = "block";
+          canvas.style.display = "block";
+
+          if (mode === "oscilloscope3") {
+            drawOscilloscope3();
+          } else if (mode === "lissajous3") {
+            drawLissajous3();
+          }
+        }
+      }
+
+      // Các input Gauss cũng cần update đồ thị
+      muInput.addEventListener("input", update);
+      sigmaInput.addEventListener("input", update);
+
+      // Các input khác
+      document.getElementById("freqY").addEventListener("input", update);
+      document.getElementById("phiY").addEventListener("input", update);
+      document.getElementById("freqX").addEventListener("input", update);
+      document.getElementById("phiX").addEventListener("input", update);
+      document.getElementById("a").addEventListener("input", update);
+      document.getElementById("b").addEventListener("input", update);
+      document.getElementById("mode").addEventListener("change", update);
+
+      // Vẽ lần đầu
+      update();
+    </script>
+  </body>
+</html>
