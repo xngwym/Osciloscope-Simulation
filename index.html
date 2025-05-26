@@ -119,6 +119,7 @@
       // Các input non-gauss
       const nonGaussInputs = document.querySelectorAll(".non-gauss");
 
+       // Chuyển [-1,1] sang toạ độ canvas
       function toCanvasX(x, width) {
         return ((x + 1) * width) / 2;
       }
@@ -126,6 +127,7 @@
         return height / 2 - y * (height / 2);
       }
 
+      // Vẽ lưới lên canvas
       function drawGrid(ctx, width, height) {
         ctx.strokeStyle = "#0f0";
         ctx.lineWidth = 0.5;
@@ -157,10 +159,13 @@
         ctx.stroke();
       }
 
+       // Hàm vẽ dạng sóng sin kiểu Oscilloscope
       function drawOscilloscope3() {
+         // Xóa canvas chính và vẽ lại lưới
         ctx.clearRect(0, 0, W, H);
         drawGrid(ctx, W, H);
 
+        // Lấy giá trị đầu vào từ các ô input HTML và chuyển đổi đơn vị 
         const fY = parseFloat(document.getElementById("freqY").value);
         const phiY =
           (parseFloat(document.getElementById("phiY").value) * Math.PI) / 180;
@@ -170,41 +175,47 @@
         const a = parseFloat(document.getElementById("a").value);
         const b = parseFloat(document.getElementById("b").value);
 
+        // T1 là thời gian quét thuận, T2 là thời gian quét ngược
         const T1 = a;
         const T2 = b;
-        const oneCycle = T1 + T2;
-        const totalTime = 2 * oneCycle;
+        const oneCycle = T1 + T2; // Một chu kỳ quét đầy đủ
+        const totalTime = 2 * oneCycle; // Bước thời gian giữa các điểm
 
-        const points = 1000;
-        const dt = totalTime / points;
+        const points = 1000; // Số lượng điểm để vẽ đồ thị
+        const dt = totalTime / points; // Bước thời gian giữa các điểm
 
+        // Vòng lặp để vẽ lên canvas chính (dao động XY)
         for (let i = 0; i < points; i++) {
           let t = i * dt;
-          let modT = t % (T1 + T2);
+          let modT = t % (T1 + T2); // Thời gian tương đối trong một chu kỳ
           let xRaw;
           let isForward;
 
+          // Xác định vị trí x theo quét thuận hay ngược
           if (modT < T1) {
             let ratio = modT / T1;
-            xRaw = -1 + 2 * ratio;
+            xRaw = -1 + 2 * ratio; // x thay đổi từ -1 đến 1 trong T1
             isForward = true;
           } else {
             let ratio = (modT - T1) / T2;
-            xRaw = 1 - 2 * ratio;
+            xRaw = 1 - 2 * ratio; // x thay đổi từ 1 đến -1 trong T2
             isForward = false;
           }
 
+          // Tính giá trị y theo hàm sin
           let y = Math.sin(2 * Math.PI * fY * t + phiY);
           let x = xRaw;
 
+          // Chuyển đổi tọa độ thực sang tọa độ canvas
           let cx = toCanvasX(x, W);
           let cy = toCanvasY(y, H);
 
+          // Vẽ điểm với màu theo chiều quét
           ctx.fillStyle = isForward ? "red" : "cyan";
           ctx.fillRect(cx, cy, 1.5, 1.5);
         }
 
-        // X(t)
+        // Vẽ đồ thị X(t)
         xtCtx.clearRect(0, 0, xtCanvas.width, xtCanvas.height);
         drawGrid(xtCtx, xtCanvas.width, xtCanvas.height);
         xtCtx.beginPath();
@@ -228,7 +239,7 @@
         xtCtx.lineWidth = 1.5;
         xtCtx.stroke();
 
-        // Y(t)
+        // Vẽ đồ thị Y(t)
         ytCtx.clearRect(0, 0, ytCanvas.width, ytCanvas.height);
         drawGrid(ytCtx, ytCanvas.width, ytCanvas.height);
         ytCtx.beginPath();
@@ -245,29 +256,37 @@
         ytCtx.stroke();
       }
 
+      // Hàm vẽ đồ thị Lissajous (không phụ thuộc thời gian)
       function drawLissajous3() {
+        // Xóa nội dung cũ trên canvas chính và vẽ lại lưới
         ctx.clearRect(0, 0, W, H);
         drawGrid(ctx, W, H);
 
+        // Lấy các giá trị tần số và pha từ input HTML
         const fY = parseFloat(document.getElementById("freqY").value);
-        const phiY =
-          (parseFloat(document.getElementById("phiY").value) * Math.PI) / 180;
+        const phiY = (parseFloat(document.getElementById("phiY").value) * Math.PI) / 180;
         const fX = parseFloat(document.getElementById("freqX").value);
-        const phiX =
-          (parseFloat(document.getElementById("phiX").value) * Math.PI) / 180;
+        const phiX = (parseFloat(document.getElementById("phiX").value) * Math.PI) / 180;
         const a = parseFloat(document.getElementById("a").value);
         const b = parseFloat(document.getElementById("b").value);
 
-        const points = 2000;
+        const points = 2000;  // Số điểm dùng để vẽ đường cong
+
+        // Bắt đầu vẽ đường cong Lissajous trên canvas chính
         ctx.beginPath();
         for (let i = 0; i < points; i++) {
+          // Tính thời gian t từ 0 đến 2π (chu kỳ đầy đủ)
           let t = (i / points) * 2 * Math.PI;
+
+          // Tính tọa độ X và Y theo hàm sin, tạo nên hình Lissajous
           let x = Math.sin(2 * Math.PI * fX * t + phiX);
           let y = Math.sin(2 * Math.PI * fY * t + phiY);
 
+          // Chuyển tọa độ thực sang tọa độ canvas
           let cx = toCanvasX(x, W);
           let cy = toCanvasY(y, H);
 
+          // Vẽ đường nối giữa các điểm
           if (i === 0) ctx.moveTo(cx, cy);
           else ctx.lineTo(cx, cy);
         }
@@ -308,6 +327,7 @@
         ytCtx.stroke();
       }
 
+      // Hàm vẽ phân bố Gauss
       function drawGauss() {
         ctx.clearRect(0, 0, W, H);
         ctx.fillStyle = "white";
